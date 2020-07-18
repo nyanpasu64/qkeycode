@@ -7,9 +7,13 @@ QtWebEngine keyboard input has different bugs on different platforms. I used [W3
 macOS has the most interesting forms of misbehavior, resulting from the `a` key having value 0.
 
 - Doesn't recognize the QWERTY `a` key (with Mac keycode 0) and falls back to QKeyEvent::key().
+    - Reported at https://bugreports.qt.io/browse/QTBUG-85660
 - Treats all modifier keys as left.
     - QKeyEvent::nativeVirtualKey() for modifier keys is always 0, so QtWebEngine falls back to QKeyEvent::key() which always assumes the left key was pressed.
-- Dead keys are identified as "unknown" instead of "dead".
+    - Commented at https://bugreports.qt.io/browse/QTBUG-69608.
+- Dead keys don't produce proper keyDown/keyUp events.
+    - Not reported. https://keycode.info/ thinks dead keys are unknown.
+    - W3C says neither keyDown nor keyUp occurs, only some composition and input events. When you press deadkey+character, both deadkey down/up are missing, and character down is missing, but character up is present.
 
 ### Windows, Qt 5.12 (2018) (Falkon browser)
 
@@ -20,8 +24,10 @@ QtWebEngine 5.12 (an older version) is especially broken. It takes QKeyEvent::ke
 Windows has less severe issues.
 
 - Discards the first press of dead keys (Greek ΄ key, AZERTY ^). If you press the dead key twice, two key downs, then two key ups, are registered.
+    - blame win32 apparently. See Stack Overflow below.
 - Right Ctrl and Alt are seen as left keys.
     - When you press an "extended key" (right Ctrl/Alt, any Windows key, pageup/down), QKeyEvent::nativeScanCode() returns a 0x1xx value, but Chromium expects a 0xe0xx value and fails to convert the scancode. So QtWebEngine falls back to QKeyEvent::key() which always assumes the left key was pressed.
+    - Reported at https://bugreports.qt.io/browse/QTBUG-85661
 
 ### Linux xkb/IBus, Qt 5.15 (Falkon browser)
 
@@ -43,6 +49,17 @@ Most QtWebEngine issues were fixed, except for modifier keys on Mac. I did not s
 ### Linux xkb/IBus, Qt 5.15
 
 - No issues as far as I can tell. The dead key issue does not manifest in Qt-only demo programs, without QtWebEngine on top. So qkeycode was already unaffected even before I started fixing bugs.
+
+## qkeycode and nonstandard input devices
+
+### Windows, AutoHotkey
+
+- `SendMode Event` (default): works like manual typing
+- `SendMode Input`: works like manual typing
+- `SendMode Play`: no keys detected, doesn't work in text editors either
+    - AutoHotkey is probably broken.
+
+Fun things happen when you switch key layouts. In both Event and Input mode, on non-QWERTY layouts, the keycodes are sometimes reverse-permuted and sometimes pretend to be QWERTY. On non-Latin layouts, all keypresses resolve to `KeyCode::NONE` (unknown key location).
 
 ## Thoughts
 
